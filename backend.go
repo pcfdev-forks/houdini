@@ -62,6 +62,18 @@ func (backend *Backend) Capacity() (garden.Capacity, error) {
 }
 
 func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, error) {
+	backend.containersL.Lock()
+	defer backend.containersL.Unlock()
+
+	capacity, err := backend.Capacity()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(backend.containers) >= int(capacity.MaxContainers) {
+		return nil, errors.New("Worker already has the maximum number of containers")
+	}
+
 	id := backend.generateContainerID()
 
 	if spec.Handle == "" {
@@ -70,16 +82,13 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 
 	dir := filepath.Join(backend.containersDir, id)
 
-	err := os.MkdirAll(dir, 0755)
+	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
 	container := newContainer(spec, dir)
-
-	backend.containersL.Lock()
 	backend.containers[spec.Handle] = container
-	backend.containersL.Unlock()
 
 	return container, nil
 }
@@ -90,7 +99,7 @@ func (backend *Backend) Destroy(handle string) error {
 	backend.containersL.RUnlock()
 
 	if !found {
-		return ErrContainerNotFound
+		return nil
 	}
 
 	err := container.Stop(false)
