@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/concourse/atc"
 )
 
 var (
@@ -78,7 +79,7 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 	}
 
 	if activeContainers >= int(capacity.MaxContainers) {
-		return nil, errors.New("worker already has the maximum number of active containers")
+		return nil, atc.WorkerNotCreatedError{ errors.New("worker already has the maximum number of active containers") }
 	}
 
 	id := backend.generateContainerID()
