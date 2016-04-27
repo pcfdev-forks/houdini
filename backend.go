@@ -79,7 +79,7 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 	}
 
 	if activeContainers >= int(capacity.MaxContainers) {
-		return nil, atc.WorkerNotCreatedError{ errors.New("worker already has the maximum number of active containers") }
+		return nil, atc.WorkerNotCreatedError{errors.New("worker already has the maximum number of active containers (changing message for testing purposes)")}
 	}
 
 	id := backend.generateContainerID()
