@@ -56,8 +56,9 @@ func (backend *Backend) Ping() error {
 }
 
 func (backend *Backend) Capacity() (garden.Capacity, error) {
-	println("NOT IMPLEMENTED: Capacity")
-	return garden.Capacity{}, nil
+	return garden.Capacity{
+		MaxContainers: 1,
+	}, nil
 }
 
 func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, error) {
