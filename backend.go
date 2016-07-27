@@ -70,8 +70,15 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 		return nil, err
 	}
 
-	if len(backend.containers) >= int(capacity.MaxContainers) {
-		return nil, errors.New("Worker already has the maximum number of containers")
+	activeContainers := 0
+	for _, container := range backend.containers {
+		if _, ok := container.currentProperties()["concourse:exit-status"]; !ok {
+			activeContainers++
+		}
+	}
+
+	if activeContainers >= int(capacity.MaxContainers) {
+		return nil, errors.New("worker already has the maximum number of active containers")
 	}
 
 	id := backend.generateContainerID()
@@ -94,10 +101,10 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 }
 
 func (backend *Backend) Destroy(handle string) error {
-	backend.containersL.RLock()
-	container, found := backend.containers[handle]
-	backend.containersL.RUnlock()
+	backend.containersL.Lock()
+	defer backend.containersL.Unlock()
 
+	container, found := backend.containers[handle]
 	if !found {
 		return nil
 	}
@@ -112,25 +119,26 @@ func (backend *Backend) Destroy(handle string) error {
 		return err
 	}
 
-	backend.containersL.Lock()
 	delete(backend.containers, handle)
-	backend.containersL.Unlock()
 
 	return nil
 }
 
 func (backend *Backend) Containers(filter garden.Properties) ([]garden.Container, error) {
-	matchingContainers := []garden.Container{}
-
 	backend.containersL.RLock()
+	defer backend.containersL.RUnlock()
+
+	return backend.filterContainers(filter)
+}
+
+func (backend *Backend) filterContainers(filter garden.Properties) ([]garden.Container, error) {
+	matchingContainers := []garden.Container{}
 
 	for _, container := range backend.containers {
 		if containerHasProperties(container, filter) {
 			matchingContainers = append(matchingContainers, container)
 		}
 	}
-
-	backend.containersL.RUnlock()
 
 	return matchingContainers, nil
 }
@@ -145,9 +153,9 @@ func (backend *Backend) BulkMetrics(handles []string) (map[string]garden.Contain
 
 func (backend *Backend) Lookup(handle string) (garden.Container, error) {
 	backend.containersL.RLock()
-	container, found := backend.containers[handle]
-	backend.containersL.RUnlock()
+	defer backend.containersL.RUnlock()
 
+	container, found := backend.containers[handle]
 	if !found {
 		return nil, ErrContainerNotFound
 	}
