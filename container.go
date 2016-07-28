@@ -6,8 +6,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/charlievieth/fs"
@@ -171,6 +174,27 @@ func (container *container) Run(spec garden.ProcessSpec, processIO garden.Proces
 	cmd := exec.Command(filepath.FromSlash(spec.Path), spec.Args...)
 	cmd.Dir = filepath.Join(container.workDir, filepath.FromSlash(spec.Dir))
 	cmd.Env = append(os.Environ(), append(container.env, spec.Env...)...)
+
+	runAs, err := user.Lookup(spec.User)
+	if err != nil {
+		return nil, err
+	}
+	uid, err := strconv.ParseUint(runAs.Uid, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	gid, err := strconv.ParseUint(runAs.Gid, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	os.Chown(cmd.Dir, int(uid), int(gid))
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Credential: &syscall.Credential{
+			Uid: uint32(uid),
+			Gid: uint32(gid),
+		},
+	}
 
 	return container.processTracker.Run(cmd, processIO, spec.TTY)
 }
