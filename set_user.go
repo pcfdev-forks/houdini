@@ -46,16 +46,13 @@ func setUser(cmd *exec.Cmd, spec garden.ProcessSpec) error {
 	var env []string
 
 	for _, envVar := range cmd.Env {
-		if userRegex.Match([]byte(envVar)) {
-			env = append(env, "USER="+runAs.Username)
-		} else if userNameRegex.Match([]byte(envVar)) {
-			env = append(env, "USERNAME="+runAs.Username)
-		} else if homeRegex.Match([]byte(envVar)) {
-			env = append(env, "HOME="+runAs.HomeDir)
-		} else {
+		if !userRegex.Match([]byte(envVar)) && !userNameRegex.Match([]byte(envVar)) && !homeRegex.Match([]byte(envVar)) {
 			env = append(env, envVar)
 		}
 	}
+	env = append(env, "USER="+runAs.Username)
+	env = append(env, "USERNAME="+runAs.Username)
+	env = append(env, "HOME="+runAs.HomeDir)
 	cmd.Env = env
 
 	return nil
