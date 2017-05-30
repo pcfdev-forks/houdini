@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/garden"
+	"errors"
 	"github.com/charlievieth/fs"
 )
 
@@ -51,11 +52,20 @@ func (backend *Backend) Ping() error {
 }
 
 func (backend *Backend) Capacity() (garden.Capacity, error) {
-	println("NOT IMPLEMENTED: Capacity")
-	return garden.Capacity{}, nil
+	return garden.Capacity{
+		MaxContainers: 1,
+	}, nil
 }
 
 func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, error) {
+	backend.containersL.Lock()
+	defer backend.containersL.Unlock()
+
+	err := backend.checkForTooManyActiveContainers()
+	if err != nil {
+		return nil, err
+	}
+
 	id := backend.generateContainerID()
 
 	if spec.Handle == "" {
@@ -64,7 +74,7 @@ func (backend *Backend) Create(spec garden.ContainerSpec) (garden.Container, err
 
 	dir := filepath.Join(backend.containersDir, id)
 
-	err := fs.MkdirAll(dir, 0755)
+	err = fs.MkdirAll(dir, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -178,4 +188,24 @@ func containerHasProperties(container *container, properties garden.Properties) 
 	}
 
 	return true
+}
+
+func (backend *Backend) checkForTooManyActiveContainers() error {
+	capacity, err := backend.Capacity()
+	if err != nil {
+		return err
+	}
+
+	activeContainers := 0
+	for _, container := range backend.containers {
+		if _, ok := container.currentProperties()["concourse:exit-status"]; !ok {
+			activeContainers++
+		}
+	}
+
+	if activeContainers >= int(capacity.MaxContainers) {
+		return errors.New("worker already has the maximum number of active containers")
+	}
+
+	return nil
 }
